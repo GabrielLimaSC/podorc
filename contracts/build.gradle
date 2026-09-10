@@ -1,0 +1,13 @@
+plugins {
+    id 'java-library'
+}
+
+// Plain library: message DTOs and JSON schemas shared by orchestrator-core and agent-runtime.
+// No Spring dependency on purpose — the contract must stay framework-agnostic.
+// Jackson is pinned to the version Spring Boot 3.4.1 manages, so the runtime modules align.
+dependencies {
+    api 'com.fasterxml.jackson.core:jackson-databind:2.18.2'
+
+    testImplementation 'org.junit.jupiter:junit-jupiter:5.11.4'
+    testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+}
