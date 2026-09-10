@@ -179,10 +179,42 @@ Recomendo autoavaliação na v1, com a interface pronta para trocar por agente c
 
 Dois controles diferentes, frequentemente confundidos:
 
-- **Rate limit**: janelas de tempo impostas pelo provedor (uso de sessão de 5h, uso semanal). Consultado e reservado **no `orchestrator-core`, antes de despachar** — não em cada agente, senão dois agentes estouram o limite simultaneamente sem saber um do outro.
+- **Quota de plano/sessão**: limites do produto autenticado, como a janela móvel de cinco horas e o limite
+  semanal do Codex. Local e cloud podem compartilhar a mesma franquia. O backend preserva exatamente as
+  janelas que o provider informar, com total, consumido/restante, `reset_at`, modelo ou grupo compartilhado,
+  origem e instante da coleta.
+- **Rate limit de API**: limites técnicos como RPM, RPD, TPM e TPD, normalmente por organização/projeto e
+  modelo ou família compartilhada. Para OpenAI API, os headers de resposta fornecem limite, restante e
+  reset de requests/tokens. Isso não é a mesma coisa que a franquia de uma assinatura Codex.
 - **Orçamento de custo**: teto em dólares por task (`max_cost_per_task_usd`) e por sprint. Um agente em loop queima crédito rápido; o teto por task é o que impede isso de virar prejuízo silencioso.
 
-O painel mostra os dois. Estourar rate limit enfileira e avisa; estourar orçamento falha a task.
+O `orchestrator-core` centraliza a visão e a reserva antes de despachar — não em cada agente, senão dois
+agentes podem consumir a mesma capacidade simultaneamente. O painel mostra quotas de plano, rate limits de
+API e orçamentos separadamente. Estourar limite recuperável enfileira até `reset_at` e avisa; estourar
+orçamento falha a task.
+
+O contrato é extensível e não fixa "cinco horas" para todo provider:
+
+```json
+{
+  "provider": "openai",
+  "account_scope": "codex_subscription | api_organization | api_project",
+  "model_scope": "gpt-x | shared-family | all",
+  "window_type": "rolling_5h | weekly | rpm | tpm | monthly_budget | custom",
+  "limit": 100,
+  "used": 35,
+  "remaining": 65,
+  "reset_at": "...",
+  "unit": "messages_estimate | requests | tokens | credits | usd",
+  "source": "provider_status | response_header | local_accounting",
+  "observed_at": "...",
+  "authoritative": false
+}
+```
+
+Estimativa do provider nunca é apresentada como contagem exata. Se uma fonte oficial não oferecer acesso
+programático ao saldo da conta, o painel mostra a última observação e seu horário ou marca a métrica como
+indisponível; não inventa o restante por extrapolação local.
 
 ### 3.6 Ferramentas: MCP e fronteira de segurança
 
@@ -268,6 +300,11 @@ Vale igualmente para `add_to_sprint`: task adicionada a uma sprint em andamento 
 ## 5. Persistência
 
 - **Postgres**: `Sprint`, `Task` (com `depends_on`, status, `done_when`, `heartbeat_at`), mensagens processadas (idempotência), consumo de LLM (custo e rate limit), log estruturado consultável por `correlation_id`.
+- **Uso e limites**: chamadas de LLM, `QuotaSnapshot` por provider/conta/modelo/janela e reservas de
+  capacidade. Histórico é mantido para o painel distinguir valor atual, reset e tendência de consumo.
+- **Workspace operacional**: `Project`, `Worktree` e `AgentSession`. O projeto aponta para uma pasta-raiz
+  permitida; a worktree registra caminho, branch, commit atual e estado observado; a sessão associa agente,
+  projeto, worktree, task atual, presença, atividade resumida e heartbeat.
 - **Vault Obsidian** (caminho fixo em `application.yml`): memória de longo prazo. Notas com front-matter (`agent`, `task_id`, `sprint_id`, `correlation_id`, `timestamp`) — o `task_id` é o que torna a escrita idempotente.
 
 Escrita concorrente: dois agentes podem terminar ao mesmo tempo. Nome de arquivo derivado de `task_id`, que é único, elimina colisão.
@@ -280,11 +317,25 @@ O desenho feito pelo Gabriel é **direção, não spec** — o tech lead e os de
 
 Este backend não implementa UI. Expõe o que ela precisa:
 
+- Projetos organizados como no Orca: criar ou registrar uma pasta de projeto, abri-la e obter numa única
+  visão suas worktrees, agentes associados e atividades atuais.
+- Worktrees descobertas a partir do Git e identificadas por caminho canônico, branch e commit. Abrir um
+  projeto atualiza a descoberta sem trocar branch nem modificar worktrees existentes.
+- Presença de agente por worktree com estados explícitos (`starting`, `idle`, `running`,
+  `waiting_for_user`, `stopped`, `error`, `offline`), `last_heartbeat_at`, task/sprint atual e uma descrição
+  curta da atividade em andamento.
+- Atividade emitida como evento estruturado pelo runtime, e não inferida de texto de log ou de raciocínio
+  interno do modelo. O painel mostra ações observáveis como "lendo diff", "executando testes" e
+  "aguardando resposta", sem expor chain-of-thought.
+- Eventos em tempo real para projeto/worktree/presença/atividade, com snapshot REST para reconexão. O
+  WebSocket é aceleração da interface; o estado durável no Postgres continua sendo a fonte de verdade.
 - Lista de agentes configurados, com nome de exibição customizável (em banco, não sobrescrevendo o YAML — preferência pessoal não se versiona no repo).
 - Chat geral e chat direcionado a um agente.
 - Grafo de dependências em tempo real: `sprint_created` dá o grafo inicial, `status_update`/`result`/`task_failed` atualizam nós. Layout por profundidade no DAG (coluna = distância da raiz), determinístico e previsível — sem force-directed.
 - Toggle automático/manual.
-- Métricas: uso de sessão, uso semanal, custo acumulado, progresso da sprint.
+- Métricas: uso da janela de cinco horas, uso semanal, resets, quotas compartilhadas, RPM/TPM quando for
+  API key, custo acumulado e progresso da sprint. A interface indica modelo/grupo, unidade, fonte,
+  instante da coleta e se o valor é exato ou estimado.
 - Linha do tempo por `correlation_id` (ver 3.3).
 
 ---
@@ -314,8 +365,13 @@ Cada sprint termina com algo demonstrável de ponta a ponta — nunca uma camada
 - `orchestrator-core`: roteia direto (mensagem direcionada) ou passa pro tech lead (geral).
 - Tech lead como agente, decide qual trabalhador responde. Ainda sem grafo.
 - Modelo `Sprint`/`Task` no Postgres, mesmo com uma task por sprint.
+- Modelo mínimo de `Project`, `Worktree` e `AgentSession`, com descoberta Git somente leitura, heartbeat e
+  atividade estruturada. A criação de pasta/worktree fica atrás de uma raiz permitida e de comandos
+  explícitos; abrir um projeto nunca altera o Git.
 - `correlation_id` propagado ponta a ponta, com log estruturado.
-- **Saída**: mensagem geral roteada corretamente sem intervenção; a linha do tempo de um `correlation_id` reconstrói o caminho inteiro.
+- **Saída**: mensagem geral roteada corretamente sem intervenção; a linha do tempo de um `correlation_id`
+  reconstrói o caminho inteiro; consultar um projeto devolve suas worktrees e indica em qual delas o agente
+  está ativo e o que está fazendo.
 
 ### Sprint 3 — Grafo e paralelismo
 
@@ -344,7 +400,9 @@ Cada sprint termina com algo demonstrável de ponta a ponta — nunca uma camada
 
 - Modo manual ponta a ponta.
 - Interrupção pedida pelo agente, com retomada a partir do checkpoint (4.3).
-- Rate limit centralizado e orçamento de custo por task/sprint (3.5).
+- Adaptadores de quota por provider, rate limit centralizado, reservas concorrentes e orçamento de custo
+  por task/sprint (3.5). Para Codex, preservar janelas de cinco horas e semanais quando reportadas; para
+  API key, capturar limites/restantes/resets dos headers por modelo ou grupo compartilhado.
 - Retry com backoff, propagação correta de `blocked`.
 - Recuperação de task órfã por heartbeat (3.2).
 - **Saída**: agente trava em ambiguidade, pergunta, recebe resposta e continua do ponto exato. Forçar falha e observar o comportamento correto em cada modo.
@@ -363,10 +421,18 @@ Cada sprint termina com algo demonstrável de ponta a ponta — nunca uma camada
 
 ### Sprint 7 — API do painel
 
-- WebSocket publicando eventos de `orchestrator.outbound`.
-- REST: agentes, sprints/tasks, envio de mensagem, toggle, métricas, linha do tempo por `correlation_id`, histórico de checkpoints e retomada ramificada (3.2.1).
+- WebSocket publicando eventos de `orchestrator.outbound` e eventos de projeto, worktree, presença e
+  atividade dos agentes.
+- REST: projetos (criar/registrar/abrir), worktrees, sessões/presença dos agentes, agentes,
+  sprints/tasks, envio de mensagem, toggle, quotas de sessão/semana/API, métricas, linha do tempo por
+  `correlation_id`, histórico de
+  checkpoints e retomada ramificada (3.2.1).
+- O contrato oferece um snapshot agregado de projeto para a primeira renderização e eventos incrementais
+  versionados para manter a interface atualizada sem polling agressivo.
 - Sem frontend — o objetivo é o backend pronto para o Impeccable consumir.
-- **Saída**: toda funcionalidade da seção 6 tem endpoint correspondente, testável via `curl`.
+- **Saída**: toda funcionalidade da seção 6 tem endpoint correspondente, testável via `curl`; desconectar
+  e reconectar um cliente reconstrói a mesma visão de projeto/worktrees/agentes a partir do snapshot e
+  continua recebendo atividades em tempo real.
 
 ### Sprint 8 — Jenkins e endurecimento
 
@@ -406,6 +472,8 @@ O oposto também vale: se algo aqui for complexidade desnecessária para o caso 
 ## 10. Fora de escopo
 
 - Frontend (Impeccable, depois do backend fechado).
+- Terminal web, streaming bruto de stdout/stderr e exposição de raciocínio interno dos agentes. A v1
+  fornece estado e atividade estruturados; uma experiência de terminal pode ser avaliada depois.
 - Configuração de agente via UI — só YAML por enquanto.
 - Busca semântica na memória antes de `recent` provar insuficiente.
 - Layout force-directed no grafo.

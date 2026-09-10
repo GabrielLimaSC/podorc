@@ -4,6 +4,14 @@ AGENTS.md
 TASKS.md
 TESTING.md
 
+# Estado e configuração local dos agentes (nunca versionar)
+.agents/
+.codex/
+.claude/
+.mcp.json
+*.agent-state.json
+*.session-state.json
+
 # IDE / SO
 .DS_Store
 .idea/
@@ -25,4 +33,3 @@ out/
 # Logs e runtime local
 *.log
 data/
-
