@@ -14,8 +14,9 @@ Descreva o comportamento entregue e os arquivos/contratos afetados.
 - [ ] Cenário manual demonstrado quando aplicável.
 - [ ] Nenhuma credencial ou dado sensível foi incluído.
 - [ ] O PR mira `dev` (ou `main` apenas para fechamento de sprint aprovado).
-- [ ] O autor e o revisor são identidades distintas.
-- [ ] Commits e textos não contêm `Co-authored-by` nem atribuição automática.
+- [ ] Revisão cruzada do outro Dev registrada abaixo; o merge é feito pelo Tech Lead, não pelo autor.
+- [ ] Commits e textos não contêm `Co-authored-by`, `Claude-Session` nem qualquer marca de IA.
+- [ ] Autoria dos commits é `Gabriel Lima <gabrielsiqueira311@gmail.com>`.
 
 Comandos e resultados:
 
