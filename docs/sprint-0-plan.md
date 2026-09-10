@@ -23,6 +23,19 @@ antes de abrir a Sprint 1.
   expõe contratos já exercitados.
 - Sete decisões da spec (`[ABERTO]`) e do `CLAUDE.md` continuam sem dono e vão para o Gabriel na S0-TL-03.
 
+**Calibração de escopo (Gabriel, 2026-09-10).** A referência de "quanto é suficiente" por funcionalidade é
+**o Orca no básico**: abrir projeto → worktrees → presença/atividade dos agentes → conversar com eles. Faz
+tudo o que a spec pede (mensageria, memória, grafo, checkpoint, MCP, fan-out), mas cada peça entregue no
+nível funcional mínimo, sem gold-plating. "Passar do ponto" é polir/estender além do que a spec descreve;
+"não chegar no ponto" é entregar mock ou camada isolada que só funciona quando a próxima terminar.
+
+**Provider de LLM (decisão 2, resolvida).** Sem API key. Dois adaptadores `LlmProvider` como subprocesso,
+com o login de assinatura do Gabriel: **Claude Code CLI** (`claude -p --output-format json`) e **Codex
+CLI** (`codex exec`). Cada `agent.yaml` escolhe via `llm.provider: claude | codex`. Sem teto em dólares na
+v1 — o controle são as janelas de assinatura de cada CLI (5h/semanal). Telemetria de custo/tokens é
+best-effort: o JSON do `claude` traz `usage` + `total_cost_usd`; o do `codex`, o que emitir; ausente fica
+`null`.
+
 ---
 
 ## 2. Fronteira entre `orchestrator-core` e `agent-runtime`
@@ -154,10 +167,12 @@ salvo indicação. `→` lista o que muda em relação à spec canônica.
 - **Dev 1:** monorepo + build, `infra/docker-compose.yml` (Kafka + Postgres), wiring dos módulos,
   tabela de mensagens processadas + deduplicação por `message_id` na mesma transação do resultado.
 - **Dev 2:** `agent-runtime` carrega um `agent.yaml` fixo, consome `orchestrator.inbound`, chama LLM
-  atrás de `LlmProvider`, publica em `orchestrator.outbound`; prompt assembly determinístico (prefixo
-  estável); telemetria de `input`/`output`/`cached` por chamada persistida.
+  atrás de `LlmProvider` (adaptador Claude Code CLI; adaptador Codex CLI logo em seguida, contra a mesma
+  interface), publica em `orchestrator.outbound`; prompt assembly determinístico (prefixo estável);
+  telemetria de `input`/`output`/`cached`/custo por chamada persistida (best-effort conforme a CLI).
 - **Sem:** tech lead, grafo, vault, workspace.
 - **→** telemetria de tokens/custo e prompt assembly determinístico entram já aqui (da variante).
+- **→** `LlmProvider` = wrapper de subprocesso de CLI de assinatura, não cliente HTTP (decisão 2).
 - **Critério de saída:** mensagem entra por uma fila e a resposta sai na outra; reenviar a mesma
   `message_id` não dispara segunda chamada de LLM; existe uma linha de consumo de LLM por chamada no
   Postgres.
@@ -216,9 +231,10 @@ salvo indicação. `→` lista o que muda em relação à spec canônica.
 ### S6 — Resiliência, interrupção e quotas
 - **Depende de:** S5
 - **Dev 1:** modo manual ponta a ponta; rate limit centralizado + reserva antes de despachar +
-  adaptadores de quota por provider (Codex: janelas de 5h e semanal quando reportadas; API key:
-  limites/restantes/resets dos headers por modelo ou grupo); orçamento de custo por task e por sprint;
-  eventos versionados de presença/atividade no barramento.
+  adaptadores de quota por provider — **duas janelas de assinatura separadas**, Claude CLI e Codex CLI
+  (5h e semanal), cada uma com total/consumido/reset quando a CLI reportar; sem RPM/TPM (não há API key);
+  `authoritative: false` quando a CLI não expuser saldo; orçamento por task e por sprint em unidade de
+  mensagens/estimativa, não USD; eventos versionados de presença/atividade no barramento.
 - **Dev 2:** interrupção pedida pelo agente com retomada a partir do checkpoint; retry com backoff e
   **retry por delta/diagnóstico** (nunca repetição cega sem sinal novo); propagação correta de
   `blocked`; recuperação de task órfã acionando retomada.
@@ -271,9 +287,14 @@ salvo indicação. `→` lista o que muda em relação à spec canônica.
 
 ## 8. Riscos e itens subespecificados (além dos `[ABERTO]`)
 
-1. **Identidade de quota sem API programática.** Vários providers não expõem saldo de assinatura por API.
-   O contrato já prevê `authoritative: false` e "última observação + horário"; falta definir *como* a
-   observação chega (coleta manual? scraping? entrada no painel?). Decisão de produto — item 9.7.
+1. **Saldo de quota das CLIs.** Claude e Codex CLI podem não expor o consumido/restante da janela de
+   assinatura de forma programática confiável. Onde não expuserem, o painel mostra `authoritative: false`
+   e a última observação com horário; não extrapola. Definir na S6 *como* a observação é coletada (saída
+   da própria CLI, se houver; senão, entrada manual no painel).
+1b. **CLI de assinatura como motor de backend.** Rodar `claude`/`codex` como subprocesso de um serviço é
+   mais frágil que um POST (parse de stdout, prompt interativo, versão da CLI) e pode esbarrar nos termos
+   de uso de cada assinatura. Risco aceito pelo Gabriel (2026-09-10); mitigar isolando toda a
+   especificidade de CLI dentro do adaptador `LlmProvider`.
 2. **`agent-runtime` e Postgres.** A spec põe checkpoint/telemetria no runtime, mas a persistência é
    Postgres. Definido neste plano: o runtime escreve via a mesma camada de dados do core (mesmo processo
    na v1); quando os módulos se separarem, isso vira um contrato explícito. Registrar como dívida.
@@ -297,10 +318,13 @@ salvo indicação. `→` lista o que muda em relação à spec canônica.
 Pauta da S0-TL-03. Cada item tem recomendação do Tech Lead; a decisão final é do Gabriel porque muda
 custo, segurança, experiência ou arquitetura difícil de reverter.
 
-| # | Decisão | Recomendação do Tech Lead |
+**Status:** todas aprovadas pelo Gabriel em 2026-09-10 com a recomendação do Tech Lead. A 9.2 foi
+resolvida com um desenho concreto (ver célula).
+
+| # | Decisão | Recomendação / Resolução |
 |---|---|---|
 | 9.1 | Build, versão de Java e layout exato do monorepo | Gradle multi-módulo, Java 21 LTS, Spring Boot 3.x, com módulo `contracts` adicional |
-| 9.2 | Provider/modelo de LLM inicial, política de credenciais e teto financeiro de desenvolvimento | Uma interface `LlmProvider` + um adaptador concreto do provider que o Gabriel já paga; teto mensal explícito de dev; credenciais só via `.env`/config externa |
+| 9.2 | Provider/modelo de LLM, credenciais e teto de desenvolvimento | **Resolvido:** sem API key. Interface `LlmProvider` com dois adaptadores de subprocesso — Claude Code CLI (`claude -p --output-format json`) e Codex CLI (`codex exec`) — sob o login de assinatura do Gabriel. `agent.yaml` escolhe via `llm.provider`. Sem teto em USD na v1; controle são as janelas 5h/semanal de cada CLI. Telemetria de custo/tokens best-effort por CLI |
 | 9.3 | Granularidade e atomicidade do checkpoint | Por passo, append-only; transição de estado + checkpoint na mesma transação Postgres; efeito colateral registrado antes de considerado feito |
 | 9.4 | Avaliação de `done_when` | Adaptativa: determinística quando traduzível; autoavaliação curta em modelo barato para semântico de baixo risco; agente crítico como interface stub na v1 |
 | 9.5 | Teto de interrupções por task | 3; depois a task falha e escala ao tech lead |
