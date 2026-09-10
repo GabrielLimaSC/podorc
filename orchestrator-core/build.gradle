@@ -4,6 +4,13 @@ plugins {
     id 'io.spring.dependency-management'
 }
 
+// Override the Testcontainers version the Spring Boot BOM pins (see gradle.properties).
+dependencyManagement {
+    imports {
+        mavenBom "org.testcontainers:testcontainers-bom:${testcontainersVersion}"
+    }
+}
+
 // Composition root: the only bootable module in v1. It depends on agent-runtime so both
 // run in one process; the Kafka topics remain the real boundary for a later split.
 dependencies {
@@ -12,7 +19,37 @@ dependencies {
 
     implementation 'org.springframework.boot:spring-boot-starter-web'
     implementation 'org.springframework.boot:spring-boot-starter-actuator'
+    implementation 'org.springframework.boot:spring-boot-starter-jdbc'
+    implementation 'org.springframework.kafka:spring-kafka'
+    implementation 'org.flywaydb:flyway-core'
+    implementation 'org.flywaydb:flyway-database-postgresql'
+    runtimeOnly 'org.postgresql:postgresql'
 
     testImplementation 'org.springframework.boot:spring-boot-starter-test'
+    // Integration tests (@Tag("infra")) run real Postgres + Kafka via Testcontainers.
+    testImplementation 'org.springframework.boot:spring-boot-testcontainers'
+    testImplementation 'org.testcontainers:junit-jupiter'
+    testImplementation 'org.testcontainers:postgresql'
+    testImplementation 'org.testcontainers:kafka'
     testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+}
+
+// `./gradlew build` runs unit tests only — no Docker required.
+tasks.named('test') {
+    useJUnitPlatform {
+        excludeTags 'infra'
+    }
+}
+
+// Real Postgres + Kafka via Testcontainers; needs a running Docker daemon.
+tasks.register('integrationTest', Test) {
+    description = 'Integration tests against real Postgres + Kafka (Testcontainers; needs Docker).'
+    group = 'verification'
+    testClassesDirs = sourceSets.test.output.classesDirs
+    classpath = sourceSets.test.runtimeClasspath
+    useJUnitPlatform {
+        includeTags 'infra'
+    }
+    shouldRunAfter tasks.named('test')
+    outputs.upToDateWhen { false }
 }
