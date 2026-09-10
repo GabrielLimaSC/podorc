@@ -1,0 +1,8 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://podorc.dev/schema/task-state.v1.schema.json",
+  "title": "task state (v1)",
+  "description": "Lifecycle states of a task in a sprint DAG. Mirrors com.podorc.contracts.message.TaskState. Transitions: blocked -> queued -> in_progress -> done | failed.",
+  "type": "string",
+  "enum": ["blocked", "queued", "in_progress", "done", "failed"]
+}

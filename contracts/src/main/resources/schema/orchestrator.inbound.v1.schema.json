@@ -1,0 +1,59 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://podorc.dev/schema/orchestrator.inbound.v1.schema.json",
+  "title": "orchestrator.inbound message (v1)",
+  "description": "Contract for messages on the orchestrator.inbound Kafka topic. Mirrors com.podorc.contracts.message.InboundMessage.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "message_id",
+    "correlation_id",
+    "conversation_id",
+    "sender",
+    "content",
+    "attempt",
+    "timestamp"
+  ],
+  "properties": {
+    "message_id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "Unique id of this message; deduplication key."
+    },
+    "correlation_id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "Run-wide trace id, propagated unchanged across both topics."
+    },
+    "conversation_id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "sprint_id": {
+      "type": ["string", "null"]
+    },
+    "task_id": {
+      "type": ["string", "null"]
+    },
+    "target_agent_id": {
+      "type": ["string", "null"],
+      "description": "null / absent means a general message the tech lead routes."
+    },
+    "sender": {
+      "type": "string",
+      "minLength": 1,
+      "description": "\"user\", \"tech-lead\", or an agent id."
+    },
+    "content": {
+      "type": "string"
+    },
+    "attempt": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "timestamp": {
+      "type": "string",
+      "format": "date-time"
+    }
+  }
+}
