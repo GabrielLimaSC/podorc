@@ -7,7 +7,12 @@ plugins {
 // Jackson is pinned to the version Spring Boot 3.4.1 manages, so the runtime modules align.
 dependencies {
     api 'com.fasterxml.jackson.core:jackson-databind:2.18.2'
+    api 'com.fasterxml.jackson.datatype:jackson-datatype-jsr310:2.18.2'
 
     testImplementation 'org.junit.jupiter:junit-jupiter:5.11.4'
+    testImplementation 'org.assertj:assertj-core:3.26.3'
+    // Validates the versioned JSON schemas against serialized DTOs (test-only: schema
+    // enforcement at the queue boundary is wired by S1-08 if it needs it in main).
+    testImplementation 'com.networknt:json-schema-validator:1.5.4'
     testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
 }
