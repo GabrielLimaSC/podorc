@@ -17,3 +17,13 @@ management:
       probes:
         enabled: true
       show-details: ${PODORC_HEALTH_SHOW_DETAILS:never}
+
+# LLM runtime (S1-05). Decision 2: no API key — the adapter shells out to the `claude` CLI under the
+# operator's subscription login. Only the executable path and call limits live here.
+podorc:
+  llm:
+    claude-cli-path: ${PODORC_LLM_CLAUDE_CLI_PATH:claude}
+    # CLI cold start + a real completion; raise if models with long thinking time time out.
+    timeout: ${PODORC_LLM_TIMEOUT:180s}
+    # Passed to `--disallowedTools`; "*" blocks every tool (the S1 echo agent has none).
+    disallowed-tools: ${PODORC_LLM_DISALLOWED_TOOLS:*}
