@@ -1,0 +1,28 @@
+# Contexto vivo do time, compartilhado por symlink entre worktrees
+CLAUDE.md
+AGENTS.md
+TASKS.md
+TESTING.md
+
+# IDE / SO
+.DS_Store
+.idea/
+.vscode/
+*.iml
+
+# Java / build
+.gradle/
+build/
+target/
+out/
+*.class
+
+# Ambiente e segredos
+.env
+.env.*
+!.env.example
+
+# Logs e runtime local
+*.log
+data/
+
