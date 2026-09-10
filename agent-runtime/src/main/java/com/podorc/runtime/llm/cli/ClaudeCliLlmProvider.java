@@ -40,7 +40,16 @@ public final class ClaudeCliLlmProvider implements LlmProvider {
     private final ClaudeCliProperties properties;
     private final Path neutralWorkingDir;
 
-    public ClaudeCliLlmProvider(CliRunner runner, ObjectMapper mapper, ClaudeCliProperties properties) {
+    /**
+     * Production constructor: the adapter owns a private {@link ObjectMapper} for parsing the CLI
+     * envelope, so it never touches the application-wide mapper.
+     */
+    public ClaudeCliLlmProvider(CliRunner runner, ClaudeCliProperties properties) {
+        this(runner, new ObjectMapper(), properties);
+    }
+
+    /** Constructor for tests that want to supply their own mapper. */
+    ClaudeCliLlmProvider(CliRunner runner, ObjectMapper mapper, ClaudeCliProperties properties) {
         this.runner = runner;
         this.parser = new ClaudeCliResponseParser(mapper);
         this.properties = properties;

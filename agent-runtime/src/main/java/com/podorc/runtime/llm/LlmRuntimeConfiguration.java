@@ -1,6 +1,5 @@
 package com.podorc.runtime.llm;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.podorc.runtime.llm.cli.ClaudeCliLlmProvider;
 import com.podorc.runtime.llm.cli.ClaudeCliProperties;
 import com.podorc.runtime.llm.cli.CliRunner;
@@ -19,16 +18,13 @@ import org.springframework.context.annotation.Configuration;
  * <p>Every bean here is {@link ConditionalOnMissingBean} so a later sprint (or a test) can override
  * any piece — in particular {@link LlmCallRecorder}, whose real JDBC implementation arrives with the
  * orchestrator-core data layer.
+ *
+ * <p>No {@code ObjectMapper} bean is declared: the CLI-envelope parser owns a private mapper, so
+ * this module never competes with Spring Boot's application-wide {@code ObjectMapper}.
  */
 @Configuration
 @EnableConfigurationProperties(ClaudeCliProperties.class)
 public class LlmRuntimeConfiguration {
-
-    @Bean
-    @ConditionalOnMissingBean
-    ObjectMapper llmObjectMapper() {
-        return new ObjectMapper();
-    }
 
     @Bean
     @ConditionalOnMissingBean
@@ -38,9 +34,8 @@ public class LlmRuntimeConfiguration {
 
     @Bean
     @ConditionalOnMissingBean(LlmProvider.class)
-    LlmProvider claudeCliLlmProvider(CliRunner cliRunner, ObjectMapper objectMapper,
-                                     ClaudeCliProperties properties) {
-        return new ClaudeCliLlmProvider(cliRunner, objectMapper, properties);
+    LlmProvider claudeCliLlmProvider(CliRunner cliRunner, ClaudeCliProperties properties) {
+        return new ClaudeCliLlmProvider(cliRunner, properties);
     }
 
     @Bean

@@ -2,7 +2,6 @@ package com.podorc.runtime.llm.cli;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.podorc.runtime.llm.LlmRequest;
 import com.podorc.runtime.llm.LlmResult;
 import com.podorc.runtime.llm.ProviderId;
@@ -22,7 +21,7 @@ class ClaudeCliLlmProviderLiveTest {
     @Test
     void realCallReturnsTextAndWhateverUsageTheCliReports() {
         ClaudeCliLlmProvider provider = new ClaudeCliLlmProvider(
-                new SystemCliRunner(), new ObjectMapper(), ClaudeCliProperties.defaults());
+                new SystemCliRunner(), ClaudeCliProperties.defaults());
 
         LlmResult result = provider.call(new LlmRequest(
                 "claude-haiku-4-5",

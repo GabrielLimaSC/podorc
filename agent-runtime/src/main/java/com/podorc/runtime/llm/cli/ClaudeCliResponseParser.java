@@ -42,7 +42,7 @@ public final class ClaudeCliResponseParser {
 
         if (root == null || !root.isObject()) {
             // No parseable envelope. Exit code and stderr are all we have to go on.
-            throw classifyFailure(result.exitCode(), result.stdout(), result.stderr(),
+            throw classifyFailure(result.exitCode(), null, result.stdout(), result.stderr(),
                     "claude CLI produced no JSON envelope");
         }
 
@@ -51,7 +51,7 @@ public final class ClaudeCliResponseParser {
         if (isError || (subtype != null && !subtype.equals("success")) || result.exitCode() != 0) {
             String detail = firstNonBlank(text(root, "result"), result.stderr(),
                     "subtype=" + subtype);
-            throw classifyFailure(result.exitCode(), text(root, "result"), result.stderr(),
+            throw classifyFailure(result.exitCode(), root, text(root, "result"), result.stderr(),
                     "claude CLI returned an error (subtype=" + subtype + "): " + snippet(detail));
         }
 
@@ -66,19 +66,14 @@ public final class ClaudeCliResponseParser {
         return new LlmResult(completion, usage, result.stdout(), meta);
     }
 
-    /** Classifies a failure with a JSON body or bare stderr into a typed exception. */
-    public LlmProviderInvocationException classifyToInvocation(CliInvocationResult result, String message) {
-        return new LlmProviderInvocationException(PROVIDER, result.exitCode(),
-                result.stderr().isBlank() ? result.stdout() : result.stderr(), message);
-    }
-
-    private RuntimeException classifyFailure(int exitCode, String body, String stderr, String message) {
+    private RuntimeException classifyFailure(int exitCode, JsonNode envelope, String bodyText,
+                                            String stderr, String message) {
         Integer apiStatus = null;
-        JsonNode root = tryReadJson(body);
-        if (root != null && root.has("api_error_status") && root.get("api_error_status").isInt()) {
-            apiStatus = root.get("api_error_status").asInt();
+        if (envelope != null && envelope.has("api_error_status")
+                && envelope.get("api_error_status").isInt()) {
+            apiStatus = envelope.get("api_error_status").asInt();
         }
-        String haystack = ((body == null ? "" : body) + "\n" + (stderr == null ? "" : stderr))
+        String haystack = ((bodyText == null ? "" : bodyText) + "\n" + (stderr == null ? "" : stderr))
                 .toLowerCase(Locale.ROOT);
 
         if (matchesAny(apiStatus, 401, 403) || containsAny(haystack,
