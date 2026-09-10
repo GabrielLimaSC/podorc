@@ -1,0 +1,7 @@
+# Intentionally invalid: llm.model is missing. Used by AgentConfigBootTest to prove that
+# a bad agent definition fails application startup.
+id: broken
+role: "Missing its model on purpose."
+system_prompt: "x"
+llm:
+  provider: claude

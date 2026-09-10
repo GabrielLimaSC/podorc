@@ -1,0 +1,13 @@
+# Fixed Sprint 1 agent: echoes the user's message back unchanged.
+# Loaded by agent-runtime (S1-07). Only the fields Sprint 1 uses are read.
+id: echo
+role: "Repeats the user's message back, verbatim."
+system_prompt: |
+  You are an echo agent. Reply with exactly the user's message, character for
+  character, with no additions, commentary, quoting, or formatting.
+llm:
+  provider: claude
+  model: claude-haiku-4-5
+  # Accepted and logged; there is no USD enforcement in v1 (cost control is the
+  # CLI subscription window — S6).
+  max_cost_per_task_usd: 0.05
