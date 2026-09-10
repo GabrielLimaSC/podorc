@@ -23,6 +23,16 @@ dependencies {
     testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
 }
 
+// Bundle the repo's agent definitions onto the classpath so `classpath:agents/echo.yaml`
+// resolves in the composed app and in tests. An operator can still point
+// `podorc.agent.definition-location` at a `file:` path to edit a definition without a rebuild.
+processResources {
+    from(rootProject.file('agents')) {
+        into 'agents'
+        include '*.yaml'
+    }
+}
+
 // Unit tests never touch a real CLI. Tests tagged "live" (they shell out to `claude`,
 // `codex`, ...) are excluded here and run only via the `liveTest` task below.
 tasks.named('test') {
