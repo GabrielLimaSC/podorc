@@ -1,0 +1,22 @@
+plugins {
+    id 'java-library'
+    id 'io.spring.dependency-management'
+}
+
+// Library module, not a standalone Spring Boot app in v1: it is composed into
+// orchestrator-core and boots in the same JVM. The Spring Boot BOM is imported only
+// to align dependency versions; no `bootJar` is produced here.
+dependencyManagement {
+    imports {
+        mavenBom "org.springframework.boot:spring-boot-dependencies:3.4.1"
+    }
+}
+
+dependencies {
+    api project(':contracts')
+
+    implementation 'org.springframework.boot:spring-boot-starter'
+
+    testImplementation 'org.springframework.boot:spring-boot-starter-test'
+    testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+}
