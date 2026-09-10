@@ -2,6 +2,23 @@ spring:
   application:
     name: podorc
 
+  # Defaults match infra/docker-compose.yml, so `docker compose up` + `bootRun` just works.
+  datasource:
+    url: ${PODORC_DB_URL:jdbc:postgresql://localhost:5432/podorc}
+    username: ${PODORC_DB_USERNAME:podorc}
+    password: ${PODORC_DB_PASSWORD:podorc}
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+    baseline-on-migrate: false
+
+  kafka:
+    bootstrap-servers: ${PODORC_KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+    # Topics are provisioned by infra (kafka-init); the app never auto-creates them.
+    consumer:
+      group-id: ${PODORC_KAFKA_GROUP_ID:podorc-orchestrator}
+      auto-offset-reset: earliest
+
 server:
   port: ${PODORC_HTTP_PORT:8080}
 
