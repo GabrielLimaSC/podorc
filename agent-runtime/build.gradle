@@ -16,7 +16,29 @@ dependencies {
     api project(':contracts')
 
     implementation 'org.springframework.boot:spring-boot-starter'
+    // LLM CLI envelope parsing. Version managed by the Spring Boot BOM above.
+    implementation 'com.fasterxml.jackson.core:jackson-databind'
 
     testImplementation 'org.springframework.boot:spring-boot-starter-test'
     testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+}
+
+// Unit tests never touch a real CLI. Tests tagged "live" (they shell out to `claude`,
+// `codex`, ...) are excluded here and run only via the `liveTest` task below.
+tasks.named('test') {
+    useJUnitPlatform {
+        excludeTags 'live'
+    }
+}
+
+tasks.register('liveTest', Test) {
+    description = 'Runs @Tag("live") tests against the real provider CLIs (must be logged in).'
+    group = 'verification'
+    testClassesDirs = sourceSets.test.output.classesDirs
+    classpath = sourceSets.test.runtimeClasspath
+    useJUnitPlatform {
+        includeTags 'live'
+    }
+    // Live calls hit the network and a real subscription window; never cache the result.
+    outputs.upToDateWhen { false }
 }
